@@ -1,5 +1,16 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+try:
+    import aioserial
+except ModuleNotFoundError:
+    if not TYPE_CHECKING:
+        raise ImportError(
+            "SerialTransport requires 'aioserial'. "
+            "Install with: pip install protocols_dispatcher[serial]"
+        ) from None
+
 import asyncio
-import aioserial
 
 from ..dispatcher import AbstractTransport
 
