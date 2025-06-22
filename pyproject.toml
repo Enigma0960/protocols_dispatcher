@@ -2,6 +2,7 @@
 requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
+
 [project]
 name = "protocols-dispatcher"
 version = "0.1.0"
@@ -16,17 +17,39 @@ classifiers = [
 ]
 requires-python = ">=3.9"
 dependencies = [
-  "typing-extensions; python_version<'3.11'",
+    "typing-extensions; python_version<'3.11'",
 ]
+
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra -q --asyncio-mode=auto"     # краткий вывод, показывать пропущенные
+xfail_strict = true                        # неожиданный xfail → ошибка CI
+filterwarnings = [
+    "error::DeprecationWarning",
+]
+markers = [
+    "slow: long-running tests",
+    "transport(name): parametrised transports",
+]
+
 
 [project.optional-dependencies]
 dev = [
-    "pytest",
+    "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
+    "pytest-mock>=3.14.1",
+    "pytest-asyncio>=1.0.0; python_version>='3.8'",
 ]
 serial = [
     "aioserial",
 ]
 all = [
-    "pytest",
+    "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
+    "pytest-mock>=3.14.1",
+    "pytest-asyncio>=1.0.0; python_version>='3.8'",
+
     "aioserial",
 ]
