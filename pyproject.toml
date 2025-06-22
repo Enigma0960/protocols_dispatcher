@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "protocols-dispatcher"
+version = "0.1.0"
+description = ""
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Supryadkin Igor", email = "igorsupr@gamail.com" }]
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+    "License :: OSI Approved :: MIT License",
+    "Intended Audience :: Developers",
+]
+requires-python = ">=3.9"
+
+
+dependencies = [
+    "typing-extensions; python_version<'3.11'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
