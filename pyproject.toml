@@ -20,6 +20,12 @@ dependencies = [
     "typing-extensions; python_version<'3.11'",
 ]
 
+[project.urls]
+PyPI = "https://pypi.org/project/protocols_dispatcher/"
+Homepage = "https://github.com/Enigma0960/protocols_dispatcher"
+Source   = "https://github.com/Enigma0960/protocols_dispatcher"
+Issues   = "https://github.com/Enigma0960/protocols_dispatcher/issues"
+
 
 [tool.pytest.ini_options]
 minversion = "8.0"
