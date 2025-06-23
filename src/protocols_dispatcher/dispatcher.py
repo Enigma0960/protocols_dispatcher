@@ -9,15 +9,48 @@ from typing import List, Dict, Any, Sequence, Callable, Optional
 class AbstractProtocol(ABC):
     @abstractmethod
     async def serialize(self, packet: Dict[str, Any]) -> bytes | None:  # noqa: D401
-        """"""
+        """
+        Преобразует «высокоуровневый» пакет в байтовую последовательность.
+
+        :param packet: Словарь с полями пакета; структуру задаёт реализация
+                       конкретного протокола.
+        :type  packet: dict[str, Any]
+        :return: Готовый набор байтов **или** ``None``, если передавать
+                 наружу ничего не нужно (например, внутренний keep-alive).
+        :rtype: bytes | None
+        """
 
     @abstractmethod
     async def deserialize(self, data) -> List[Dict[str, Any]]:  # noqa: D401
-        """"""
+        """
+        Разбирает входящий поток данных в один или несколько пакетов.
+
+        Метод вызывается каждый раз, когда транспорт получает очередной
+        блок raw-байтов. Реализация должна самостоятельно буферизовать
+        неполные сообщения и возвращать их только после полной сборки.
+
+        :param data: Сырые данные из транспорта. Может содержать
+                     как целые, так и неполные сообщения.
+        :type  data: bytes
+        :return: Список полностью разобранных пакетов;
+                 может быть пустым, если данных мало.
+        :rtype: list[dict[str, Any]]
+        """
 
     @abstractmethod
     async def matches(self, raw: bytes) -> bool:  # noqa: D401
-        """"""
+        """
+        Быстрая проверка, относится ли входящий фрейм к данному протоколу.
+
+        Используется роутером, чтобы решить, какой протокол
+        должен обработать полученный набор байтов, не выполняя при этом
+        полноценную десериализацию.
+
+        :param raw: Фрагмент входящих байт (обычно первые N байтов кадра).
+        :type  raw: bytes
+        :return: ``True``, если кадр узнаётся, иначе ``False``.
+        :rtype: bool
+        """
         return True
 
 
@@ -27,7 +60,18 @@ class AbstractFilter(ABC):
 
     @abstractmethod
     def matches(self, packet: Dict[str, Any], raw: bytes) -> bool:  # noqa: D401
-        """"""
+        """
+        Проверяет, удовлетворяет ли пакет заданному фильтру.
+
+        :param packet: Разобранный словарь, полученный из
+                       :py:meth:`AbstractProtocol.deserialize`.
+        :type  packet: dict[str, Any]
+        :param raw: Оригинальная сырья байтов пакета, как она пришла
+                    от транспорта.
+        :type  raw: bytes
+        :return: ``True``, если пакет проходит фильтр, иначе ``False``.
+        :rtype: bool
+        """
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}>"
@@ -39,11 +83,36 @@ class AbstractTransport(ABC):
 
     @abstractmethod
     async def send(self, data: bytes) -> None:  # noqa: D401
-        """"""
+        """
+        Отправляет закодированный набор байтов через конкретный транспорт.
+
+        Реализация должна гарантировать, что *весь* буфер
+        поставлен в очередь на передачу до возврата управления
+        (см. пример с `SerialTransport.send`) :contentReference[oaicite:1]{index=1}.
+
+        :param data: Готовый кадр, возвращённый
+                     :py:meth:`AbstractProtocol.serialize`.
+        :type  data: bytes
+        :return: Ничего. Короутина завершается, когда данные
+                 приняты транспортом.
+        :rtype: None
+        """
 
     @abstractmethod
     async def run(self) -> None:  # noqa: D401
-        """"""
+        """
+        Запускает цикл приёма данных у транспорта.
+
+        Короутина должна непрерывно считывать входящие байты,
+        передавать их в :pyattr:`dispatcher.process <Dispatcher.process>`
+        и завершаться только при закрытии/остановке транспорта.
+        Типичный пример реализации — см. `SerialTransport.run`
+        :contentReference[oaicite:2]{index=2}.
+
+        :return: Ничего. Короутина работает до отмены
+                 либо естественного завершения.
+        :rtype: None
+        """
 
 
 class AnyFilter(AbstractFilter):
