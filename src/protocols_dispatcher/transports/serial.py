@@ -46,10 +46,7 @@ class SerialTransport(AbstractTransport):
         await self._serial.write_async(data)
 
     async def run(self) -> None:
-        while not self._stop_event.is_set():
-            if not self._serial.is_open:
-                raise RuntimeError('Serial port is not open')
-
+        while self._serial.is_open and not self._stop_event.is_set():
             if self._serial.in_waiting:
                 data: bytes = await self._serial.read_async(min(self._serial.in_waiting, _MAX_CHUNK_SIZE))
                 await self.dispatcher.process(data)

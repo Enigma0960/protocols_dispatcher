@@ -55,7 +55,16 @@ class Dispatcher:
     def __init__(self, protocol: AbstractProtocol, transport: AbstractTransport):
         self._protocol = protocol
         self._transport = transport
+        self._transport.dispatcher = self
         self._handlers: List[tuple[Sequence[AbstractFilter], Callable[[Dict[str, Any]], Any | None]]] = []
+
+    @property
+    def protocol(self) -> AbstractProtocol:
+        return self._protocol
+
+    @property
+    def transport(self) -> AbstractTransport:
+        return self._transport
 
     def handler(self, *filters: AbstractFilter):
         def decorator(fn: Callable[[Dict[str, Any]], Any | None]):
@@ -97,7 +106,6 @@ class ProtocolRouter:
 
         for protocol, transport in protocols.items():
             dispatcher = Dispatcher(protocol, transport)
-            transport.dispatcher = dispatcher
             self._dispatchers[protocol] = dispatcher
 
         self._active: set[AbstractProtocol] = set(protocols.keys())
