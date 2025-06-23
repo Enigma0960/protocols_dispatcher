@@ -194,7 +194,7 @@ class ProtocolRouter:
             elif inspect.isclass(filter) and issubclass(filter, AbstractFilter):
                 filters = (filter(),)
             else:
-                raise TypeError("filter must be PacketFilter instance or subclass")
+                raise TypeError("Filter must be PacketFilter instance or subclass")
 
         # select protocols
         if protocol is None:
@@ -207,12 +207,11 @@ class ProtocolRouter:
         elif inspect.isclass(protocol) and issubclass(protocol, AbstractProtocol):
             selected = [p for p in self._dispatchers if isinstance(p, protocol)]
         else:
-            raise TypeError("protocol must be AbstractProtocol instance or subclass")
+            raise TypeError("Protocol must be AbstractProtocol instance or subclass")
 
         if not selected:
             raise KeyError("Specified protocol is not registered in router")
 
-        # decorator applying to chosen dispatchers
         def decorator(fn: Callable[[Dict[str, Any]], Any | None]):
             for proto in selected:
                 self._dispatchers[proto].handler(*filters)(fn)
@@ -232,7 +231,6 @@ class ProtocolRouter:
     def activate_all(self):
         self._active = set(self._dispatchers)
 
-    # ---------------- processing ----------------
     async def process(self, raw: bytes) -> Dict[str, Any] | None:
         if self._single_proto is not None and self._single_proto in self._active:
             # Fast path: only one protocol in whole router ⇒ no loop, minimal checks
