@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 [project]
 name = "protocols-dispatcher"
 version = "0.1.0"
-description = ""
+description = "Гибкая асинхронная библиотека для диспетчеризации бинарных протоколов"
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [{ name = "Supryadkin Igor", email = "igorsupr@gamail.com" }]
