@@ -52,5 +52,9 @@ class SerialTransport(AbstractTransport):
                 await self.dispatcher.process(data)
             await asyncio.sleep(0)
 
+    def start(self):
+        self._stop_event.clear()
+        self._serial.open()
+
     def stop(self):
         self._stop_event.set()

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import inspect
+import uuid
+from dataclasses import dataclass
 
-from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Sequence, Callable, Optional
+from typing import List, Dict, Any, Sequence, Callable, Optional, Type
 
 
-class AbstractProtocol(ABC):
-    @abstractmethod
+class AbstractProtocol:
+
     async def serialize(self, packet: Dict[str, Any]) -> bytes | None:  # noqa: D401
         """
         Преобразует «высокоуровневый» пакет в байтовую последовательность.
@@ -20,7 +21,6 @@ class AbstractProtocol(ABC):
         :rtype: bytes | None
         """
 
-    @abstractmethod
     async def deserialize(self, data) -> List[Dict[str, Any]]:  # noqa: D401
         """
         Разбирает входящий поток данных в один или несколько пакетов.
@@ -37,7 +37,6 @@ class AbstractProtocol(ABC):
         :rtype: list[dict[str, Any]]
         """
 
-    @abstractmethod
     async def matches(self, raw: bytes) -> bool:  # noqa: D401
         """
         Быстрая проверка, относится ли входящий фрейм к данному протоколу.
@@ -54,11 +53,10 @@ class AbstractProtocol(ABC):
         return True
 
 
-class AbstractFilter(ABC):
+class AbstractFilter:
     def __call__(self, packet: Dict[str, Any], raw: bytes) -> bool:
         return self.matches(packet, raw)
 
-    @abstractmethod
     def matches(self, packet: Dict[str, Any], raw: bytes) -> bool:  # noqa: D401
         """
         Проверяет, удовлетворяет ли пакет заданному фильтру.
@@ -77,11 +75,10 @@ class AbstractFilter(ABC):
         return f"<{self.__class__.__name__}>"
 
 
-class AbstractTransport(ABC):
+class AbstractTransport():
     def __init__(self):
         self.dispatcher: Optional['Dispatcher'] = None
 
-    @abstractmethod
     async def send(self, data: bytes) -> None:  # noqa: D401
         """
         Отправляет закодированный набор байтов через конкретный транспорт.
@@ -98,7 +95,6 @@ class AbstractTransport(ABC):
         :rtype: None
         """
 
-    @abstractmethod
     async def run(self) -> None:  # noqa: D401
         """
         Запускает цикл приёма данных у транспорта.
@@ -122,6 +118,11 @@ class AnyFilter(AbstractFilter):
 
 class Dispatcher:
     def __init__(self, protocol: AbstractProtocol, transport: AbstractTransport):
+        if not isinstance(protocol, AbstractProtocol):
+            raise TypeError("protocol must be subclass of AbstractProtocol")
+        if not isinstance(transport, AbstractTransport):
+            raise TypeError("transport must be subclass of AbstractTransport")
+
         self._protocol = protocol
         self._transport = transport
         self._transport.dispatcher = self
@@ -145,7 +146,7 @@ class Dispatcher:
     def add_callback(self, *filters: AbstractFilter, fn: Callable[[Dict[str, Any]], Any]):
         self._handlers.append((filters, fn))
 
-    async def process(self, raw: bytes) -> Dict[str, Any] | None:
+    async def process(self, raw: bytes) -> List[Dict[str, Any]] | None:
         if not await self._protocol.matches(raw):
             return None
 
@@ -157,7 +158,7 @@ class Dispatcher:
                     if res is not None:
                         await self.send(res)
 
-        return None
+        return packets
 
     async def send(self, packet: Dict[str, Any]):
         data = await self._protocol.serialize(packet)
@@ -166,19 +167,57 @@ class Dispatcher:
             await self._transport.send(data)
 
 
+@dataclass
+class RouterInfo:
+    transport: AbstractTransport
+    protocol: AbstractProtocol
+    dispatcher: Dispatcher
+
+
 class ProtocolRouter:
-    def __init__(self, protocols: Dict[AbstractProtocol, AbstractTransport]):
-        self._dispatchers: Dict[AbstractProtocol, Dispatcher] = {}
+    def __init__(
+            self,
+            *,
+            dispatchers: Optional[List[Dispatcher]] = None,
+            protocols: Optional[Dict[AbstractProtocol, AbstractTransport]] = None
+    ):
+        self._routing: List[RouterInfo] = []
 
-        if not protocols:
-            raise ValueError("At least one protocol must be provided")
+        if not dispatchers and not protocols:
+            raise ValueError("At least one dispatcher and protocol must be specified")
 
-        for protocol, transport in protocols.items():
-            dispatcher = Dispatcher(protocol, transport)
-            self._dispatchers[protocol] = dispatcher
+        if dispatchers is not None:
+            for dispatcher in dispatchers:
+                info = RouterInfo(dispatcher.transport, dispatcher.protocol, dispatcher)
+                self._routing.append(info)
 
-        self._active: set[AbstractProtocol] = set(protocols.keys())
-        self._single_proto: AbstractProtocol | None = next(iter(protocols.keys())) if len(protocols) == 1 else None
+        if protocols is not None:
+            for protocol, transport in protocols.items():
+                dispatcher = Dispatcher(protocol, transport)
+                info = RouterInfo(dispatcher.transport, dispatcher.protocol, dispatcher)
+                self._routing.append(info)
+
+    @property
+    def protocols(self) -> List[AbstractProtocol]:
+        return [info.protocol for info in self._routing]
+
+    @property
+    def transports(self) -> List[AbstractTransport]:
+        return [info.transport for info in self._routing]
+
+    @property
+    def dispatchers(self) -> List[Dispatcher]:
+        return [info.dispatcher for info in self._routing]
+
+    @property
+    def routing(self) -> List[RouterInfo]:
+        return self._routing
+
+    def rout(self, protocol: AbstractProtocol) -> Optional[RouterInfo]:
+        for info in self._routing:
+            if info.protocol == protocol:
+                return info
+        return None
 
     def handler(
             self,
@@ -198,14 +237,11 @@ class ProtocolRouter:
 
         # select protocols
         if protocol is None:
-            if self._single_proto is not None:
-                selected = [self._single_proto]
-            else:
-                selected = list(self._dispatchers.keys())
+            selected = [self._routing[0].protocol]
         elif isinstance(protocol, AbstractProtocol):
             selected = [protocol]
         elif inspect.isclass(protocol) and issubclass(protocol, AbstractProtocol):
-            selected = [p for p in self._dispatchers if isinstance(p, protocol)]
+            selected = [p for p in self._routing if isinstance(p, protocol)]
         else:
             raise TypeError("Protocol must be AbstractProtocol instance or subclass")
 
@@ -214,34 +250,22 @@ class ProtocolRouter:
 
         def decorator(fn: Callable[[Dict[str, Any]], Any | None]):
             for proto in selected:
-                self._dispatchers[proto].handler(*filters)(fn)
+                rout = self.rout(proto)
+                if rout is not None:
+                    rout.dispatcher.handler(*filters)(fn)
             return fn
 
         return decorator
 
-    def dispatcher(self, proto: AbstractProtocol) -> Dispatcher:
-        return self._dispatchers[proto]
+    async def process(self, protocol: AbstractProtocol, raw: bytes) -> Dict[str, Any] | None:
+        rout = self.rout(protocol)
+        if rout is None:
+            return None
 
-    def activate_only(self, *protocols: AbstractProtocol):
-        unknown = set(protocols) - self._dispatchers.keys()
-        if unknown:
-            raise KeyError(f"Unknown protocols: {unknown}")
-        self._active = set(protocols)
+        return await rout.dispatcher.process(raw)
 
-    def activate_all(self):
-        self._active = set(self._dispatchers)
-
-    async def process(self, raw: bytes) -> Dict[str, Any] | None:
-        if self._single_proto is not None and self._single_proto in self._active:
-            # Fast path: only one protocol in whole router ⇒ no loop, minimal checks
-            return await self._dispatchers[self._single_proto].process(raw)
-
-        for proto in self._active:
-            rsp = await self._dispatchers[proto].process(raw)
-            if rsp is not None:
-                return rsp
-
-        return None
-
-    async def send(self, proto: AbstractProtocol, packet: Dict[str, Any]):
-        await self._dispatchers[proto].send(packet)
+    async def send(self, protocol: AbstractProtocol, packet: Dict[str, Any]):
+        rout = self.rout(protocol)
+        if rout is None:
+            return
+        await rout.dispatcher.send(packet)

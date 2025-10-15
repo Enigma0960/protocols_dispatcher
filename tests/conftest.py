@@ -1,13 +1,13 @@
 import asyncio
 import pytest
 
-from protocols_dispatcher.dispatcher import Dispatcher
+from src.protocols_dispatcher.dispatcher import Dispatcher
 
 from tests.helpers import DummyProtocol, DummyTransport
 
 
 @pytest.fixture
-def proto():
+def protocol():
     return DummyProtocol()
 
 
